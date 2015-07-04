@@ -10,41 +10,53 @@
 
 module.exports = function(grunt) {
 
-  // Please see the Grunt documentation for more information regarding task
-  // creation: http://gruntjs.com/creating-tasks
+  function type(obj) {
+    return Object.prototype.toString.call(obj);
+  }
+
+  var spawn = require('child_process').spawn;
+  var parseString = require('xml2js').parseString;
 
   grunt.registerMultiTask('svn_info', 'Parsing svn info into grunt.template', function() {
-    // Merge task-specific and/or target-specific options with these defaults.
-    var options = this.options({
-      punctuation: '.',
-      separator: ', '
-    });
+    var done = this.async();
+    var svn_info = this.options({});
 
-    // Iterate over all specified file groups.
-    this.files.forEach(function(f) {
-      // Concat specified files.
-      var src = f.src.filter(function(filepath) {
-        // Warn on and remove invalid source files (if nonull was set).
-        if (!grunt.file.exists(filepath)) {
-          grunt.log.warn('Source file "' + filepath + '" not found.');
-          return false;
-        } else {
-          return true;
-        }
-      }).map(function(filepath) {
-        // Read file source.
-        return grunt.file.read(filepath);
-      }).join(grunt.util.normalizelf(options.separator));
+    switch (type(this.data)) {
+      case '[object String]':
+        var info         = spawn('svn', ['info', this.data, '--xml']);
+        var buff         = new Buffer([]);
+        var target       = this.target;
 
-      // Handle options.
-      src += options.punctuation;
+        info.stdout.on('data', function(data) {
+          buff = Buffer.concat([buff, data]);
+        });
 
-      // Write the destination file.
-      grunt.file.write(f.dest, src);
+        info.on('close', function(code) {
+          var xml = parseString(buff.toString(), function(e, obj) {
+            var entry = obj.info.entry[0];
+            svn_info[target] = {
+              "path" : entry.$.path,
+              "revision" : entry.$.revision,
+              "kind" : entry.$.kind,
+              "url" : entry.url[0],
+              "repo_root": entry.repository[0].root[0],
+              "repo_uuid" : entry.repository[0].uuid[0],
+              "wc_abspath" : entry['wc-info'][0]['wcroot-abspath'][0],
+              "wc_schedule" : entry['wc-info'][0].schedule[0],
+              "wc_depth" : entry['wc-info'][0].depth[0],
+              "last_revision": entry.commit[0].$.revision,
+              "last_author" : entry.commit[0].author[0],
+              "last_date" : entry.commit[0].date[0]
+            };
 
-      // Print a success message.
-      grunt.log.writeln('File "' + f.dest + '" created.');
-    });
+            grunt.config.merge({ svn_info : svn_info });
+
+            console.log(grunt.config.get('svn_info'));
+            done();
+          });
+        });
+        break;
+    }
   });
 
 };
