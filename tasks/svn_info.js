@@ -18,8 +18,9 @@ module.exports = function(grunt) {
   var parseString = require('xml2js').parseString;
 
   grunt.registerMultiTask('svn_info', 'Parsing svn info into grunt.template', function() {
-    var done = this.async();
-    var svn_info = this.options({});
+    var done     = this.async();
+    var options  = this.options({});
+    var svn_info = {};
 
     switch (type(this.data)) {
       case '[object String]':
